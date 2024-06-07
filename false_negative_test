@@ -1,0 +1,47 @@
+
+#To assess overall accuracy of PCR pathogen diagnostic test, we estimated the probability of not detecting an infection within an individual, a false negative. We did so by quantifying all possible outcomes or the triplicate PCR per individual. These outcomes are [111], [110], [100] and [000], where 1 indicates confirmed positive infection and 0 indicates no evidence of infection. For example, in the case of [110] two of the PCR replicates confirmed that the bird was positive for the Haemosporidian pathogen while one PCR replicate shows no indication of infection.  We used the frequency of [110] and [100] to estimate the proportion of [000], birds that were actually infected but did not indicate so in any PCR test and therefore presented a false negative. We assumed that if any of the three infections were positive, as confirmed by sequencing, the individual was infection. We also assumed that the probability of successful amplification is the same across all samples. 
+
+
+#To determine the proportion of false negative, we computed the likelihood of the data given a probability, $p_{0/1}$, of no PCR amplification when the individual is infected, and $P$ is the probability of being infected.  For example, the likelihood for an individual with two false amplifications is L[100]=3P$(p_{0/1})^2$ where the factor of 3 accounts for the possibility of the first, second or third round of PCR amplification being successful. Similar expressions apply to the other three outcomes, and the total likelihood is calculated as the product over all individuals. We conducted a grid search over a range of values for P and $p_{0/1}$ to find the maximum likelihood solution. 
+
+
+
+false_neg_prob<-function(N111, N100,N110,N000){
+  
+  lik<-function(P, p01, N111, N100,N110,N000){
+    
+    ifelse(P-p01^3-3*P*p01^2-3*P*p01>=0, P111<-P-p01^3-3*P*p01^2-3*P*p01, P111<-0)
+    
+    P100<-3*P*p01^2
+    P110<-3*P*p01
+    ifelse(1-P+ p01^3<=1, P000<-1-P+ p01^3, P000<-1)
+    
+    if(N100==0) P100<-1 #work around to take logs of 0
+    if(N110==0) P110<-1 #work around to take logs of 0
+    
+    res<-N111* log(P111)+ N100*log(P100)+ N110* log(P110)+ N000* log(P000)
+    return(res)}
+  
+  TrueProb<-seq(0.0, 0.99, 0.01)
+  Prob0given1<-seq(0.0, 0.5, 0.01)
+  x<-as.data.frame(matrix(NA, nrow=length(TrueProb), ncol=length(Prob0given1)))
+  
+  obsProb<- function(N111, N100,  N110, N000) (N111+N100+N110)/( N111+N100+N110+ N000)
+  
+  x<-as.data.frame(matrix(NA, ncol=length(TrueProb), nrow=length(Prob0given1)))
+  
+  
+  for (i in 1:length(TrueProb)) {for (j in 1:length(Prob0given1)) x[i,j]<-lik(TrueProb[i],Prob0given1[j],N111,N100,N110,N000)}
+  
+  vec<-c(obsProb(N111, N100, N110, N000), TrueProb[which(x == max(x, na.rm=T), arr.ind=TRUE)[1]], Prob0given1[which(x == max(x, na.rm=T), arr.ind=TRUE)[2]])
+  names(vec)<-c("Observed_Proportion","Estimated_proportion", "False_Negative")
+  return(vec)
+}
+
+N0 =   ## number of individuals with no positive PCR screens
+N1 =   ## number of individuals with one positive PCR screen
+N2 =   ## number of individuals with two positive PCR screens
+N3 =   ## number of individuals with three positive PCR screens
+
+false_neg_prob(N3,N1,N2,N0)
+
