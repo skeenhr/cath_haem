@@ -1,65 +1,170 @@
+ptm <- proc.time()
+require(deSolve);
 
-data {  				//number of individuals, positive/not positive, time periods
-  int <lower=0> N;            		//N = individual?
-  int <lower=0,upper=1> Ipos[N];  	//P = Positive (1) or not positive (0), should this be infection_status[N]
-  int <lower=0> nTimePeriods;
-  int <lower=1,upper=nTimePeriods> TimePeriod[N];
-  int <lower=0> K;  			//#sinusoidal components above the assumed seasonal effect
-
-}
- 
-
-parameters {
-  real background_theta;  			// background constant prevalence
-  real dev[nTimePeriods];  			// deviation in prevalence per time period
-  real <lower=0> beta[K];  			// beta coefficient for weighting of periodic deviance term
-  real <lower=0,upper=nTimePeriods> lambda[K]; 	//frequency - but can set upper limit as actual number
-  real <lower=0,upper=1> omega[K];  		// offset for periodic deviance term
-  real <lower=0> beta_ann;
-  real <lower=0,upper=1> omega_ann;
-  real <lower=1e-5> sd_dev; 
-  real beta_trend; //<lower=-3.5,upper=3.5>
-}
-
-transformed parameters {
-  real theta[nTimePeriods];
-  real phi[nTimePeriods];
-
-  for(i in 1:nTimePeriods){
-    theta[i]=background_theta + dev[i] + beta_ann*(cos(2*pi()*(i/2.0-omega_ann/2.0))) + beta_trend*(i-1); //i is time 
-    for(k in 1:K){  							 // consider wave terms; j'th term has periodicity j+1 time periods
-        theta[i]=theta[i]+beta[k]*(cos(2*pi()*(i/lambda[k]-omega[k])));  //allows for omega to specify a fractional offset b/w 0:1 for the starting point of the wave
-    }
-    phi[i] = 1/(1+exp(-theta[i]));
-  }
-}
-
-model {
-  background_theta ~ normal(0,10);
-  beta_ann ~ exponential(0.01);   	//experiment with smaller/larger values
-  beta ~ exponential(0.01);       	//smaller(ie 1/100) is a more flat prior, larger(ie: 1/1) favors beta = 0
-  lambda ~ uniform(1,nTimePeriods);
-  omega ~ uniform(0,1);
-  omega_ann ~ beta(1e-6,1e-6);     	//informative prior because forcing towards either 0 or 1 
-  beta_trend ~ uniform(-3.5,3.5);  	//
-  Ipos ~ bernoulli(phi[TimePeriod]);
-  dev ~ normal(0, sd_dev); 
-
-}
-
-
-//the following block is required for "loo" to work (for LOOCV)
-//repeat the likelihood calculation in a generated quantities block.
-
-generated quantities{ 
-vector[N] log_lik;
-for(i in 1:N){
-//   TimePeriod = TimePeriod[N];#Look up time period for individual i 
-   log_lik[i] = bernoulli_lpmf(Ipos[i] | phi[TimePeriod[i]]);
-}
+#The function that describes the ODE's
+vector<-function(t,y,p){
+  Xh = y[1]; #susceptible/uninfected birds
+  Yh = y[2]; #infected birds
+  Xm = y[3]  #susceptible/uninfected mosquitoes
+  Ym = y[4]  #infected mosquitoes
+  with(as.list(p), {
+    #dXh.dt = nuH - r*Thm*Ym*Xh - muH*Xh
+    dXh.dt =  - Thm*Ym*Xh  
+    dYh.dt = Thm*Ym*Xh - gammaH*Yh
+    dXm.dt =  - Tmh*Yh*Xm 
+    dYm.dt = Tmh*Yh*Xm
+    return(list(c(dXh.dt, dYh.dt, dXm.dt, dYm.dt)));
+  })
 }
 
 
 
+#################################################################################
+
+Nm = 1e4;          #Seems to have no effect, don't change it from 1e4
+gammaH = 0.5;      #don't change from 0.5; 
+Thm = 1e-1;        #Seems to have little to no effect, don't change it
+Tmh = 1e-3;        #Seems to have little to no effect, don't change it
+p = list(Thm = Thm,gammaH = gammaH, Tmh = Tmh)
+steps  = 1;
+EpizTime = 5;      #3-cycle: 15; 8-12 cycle: 5 
+lambda = 1.005;    #3-cycle 4.5 #8-cycle: 1.1; 9-cycle: 1.02; 10-12: 1.005 #9-cycle: lambda = 1.15; 16-cycle: lambda = 1.01; 20-cycle: lambda = 1.0001
+lam2 = 0.1;        #3-cycle: 0.7  #4.3-cycle: 0.5 #8-12: 0.1; 
+maxn = 500;        #Number of generations                                                          
+phi = 30;          #3.3: 1.5; #4.5-cycle: 5 #8cycle: 25; 9-12 cycle: 30
+omega = 0.21;      #3-cycle or 8-cycle or nearly 9-cycle: 0.25; nearly 10-cycle: 0.22;
+#11-cycle: 0.21;   #nearly 12-cycle: 0.205 (period calculation gets weird)
+ClrFrac = 0.005;   #3-cycle: 0.05; 8-12 cycle: 0.005   
+psi = 0.2          #3-cycle, 8-12 cycle:  0.5; ###this one induced seasonality for a 3-cycle at 0.95
+FourGraphics = 0;
+sigma = 0.05;      #Stochasticity: make this whatever you want it to be 
+
+#############################################################################################  
+
+
+#You must store the old values of N and Z
+
+NStor = numeric();
+ZStor = numeric();
+FIStor = numeric();
+
+#FIStor[1] = 0;
+
+oldN = 1.0; oldZ = 1.0;
+
+t = seq(from=0,to=EpizTime,by=steps); #now we define the time interval and the step size
+
+#For loop starts here
+nData = 1;
+for(n in 1:maxn){ #maxn generations
+   
+    NStor[n] = oldN; #storing the answer
+    ZStor[n] = oldZ;
+   
+########## First Epizootic: breeding grounds
+
+    y0 = c(oldN, phi*oldZ, Nm, 0);
+    out = ode(y=y0,times=t,func=vector,parms=p); #doing the integration
+    last = nrow(out);
+    FI1 = (1.0 - (out[last,2]/oldN));
+    FIStor[nData] = psi*(1-ClrFrac)*FI1; # this should look like the analogous statement below
+    nData = nData + 1;
+    
+########## Second Epizootic: wintering grounds
+   
+    oldNtmp = (1-FI1)*oldN + psi*ClrFrac*FI1*oldN;
+    #oldZtmp = FI1*oldN + (1-ClrFrac)*FI1*oldN;
+    oldZtmp = psi*(1-ClrFrac)*FI1*oldN;
+    y0 = c(oldNtmp, oldZtmp, Nm, 0);
+    out = ode(y=y0,times=t,func=vector,parms=p); #doing the integration
+    last = nrow(out);
+    oldNtmp2 = oldNtmp + oldNtmp*(1-psi)*ClrFrac*FI1; #Really?
+    FI2 = (1.0 - (out[last,2]/oldNtmp2));
+    FIStor[nData] = psi*(1-ClrFrac)*FI2;
+    nData = nData + 1;
+
+    rand = rnorm(1,mean=0,sd=sigma)
+
+    N = lambda*exp(rand)*( (1-FI2) + FI2*ClrFrac)*oldNtmp + psi*lam2*(1-ClrFrac)*FI2*oldNtmp + omega*oldN;  #insert the N equation here
+    #Z = phi*oldNtmp*FI2*psi;	 
+    Z = oldNtmp*FI2*psi;
+    
+    #cat("N:",N,"Z:",Z,"FractInf:",FractInf,"\n")
+	
+    oldN = N; #update oldN
+    oldZ = Z; #update oldZ
+
+	
+} #For loop ends here
+
+Total = round(0.2*maxn); #what fraction of generations to use in fraction infected plot
+Start = maxn-Total #don't start at beginning
+#Start = ;
+Gens = c((Start+1):maxn); #generations for ?
+Time = c(1:Total);
+Gens2 = (maxn-100):maxn; #generations for densities
+Time2 = 1:length(Gens2)
+
+
+#Time Series graph
+par(mfrow=c(2,2));
+par(mai=c(0.5,0.55,0.1,0.45));
+
+#Hosts and pathogens
+plot(Time2,log10(NStor[Gens2]),type="l",lwd=2,axes=FALSE,xlab="",ylab="");
+axis(1,pretty(range(Time2,5)));
+axis(2,pretty(range(log10(NStor[Gens2])),5));
+mtext(text="Generations (years)",side=1,padj=2.25);
+mtext(text="log10 Host density",side=2,padj=-3.0);
+mtext(text="log10 Pathogen density",side=4,padj=2.5);
+
+par(new="TRUE");
+plot(Time2,log10(ZStor[Gens2]),type="l",axes=FALSE,xlab="",ylab="");
+axis(4,pretty(range(log10(ZStor[Gens2])),5));
+GensFI = (nData-50):nData;
+TimeFI = c(1:length(GensFI));
+plot(TimeFI/2,FIStor[GensFI],type="o",ylab="")
+mtext(text="Generations (years)",side=1,padj=2.5);
+mtext(text="Fraction Infected",side=2,padj=-3.0);
+
+
+#Lower left: total population size
+plot(Gens2,(NStor[Gens2] + ZStor[Gens2]),type="l",lwd=2,xlab="",ylab="");
+mtext(text="log10 Total pop. density",side=2,padj=-3.0);
+mtext(text="Generations (years)",side=1,padj=2.25);
+
+
+#Lower right: phase plot
+plot(log10(NStor[Gens]),log10(ZStor[Gens]),cex=0.1,axes=FALSE,xlab="",ylab="");
+axis(1,pretty(range(log10(NStor[Gens])),5));
+axis(2,pretty(range(log10(ZStor[Gens])),5));
+mtext(text="log10 Host density",side=1,padj=2.5);
+mtext(text="log10 Pathogen density",side=2,padj=-3);
+
+
+z = spectrum(FIStor,plot=FALSE); #Calculating the power spectrum
+#plot((1/z$freq)/2,sqrt(z$spec),type="o",xlim=c(0,20),xlab="Period",ylab="Power"); 
+maxPower = max(z$spec);
+Index = which((z$spec)==maxPower);
+zOrder = order(z$spec)
+zLength = length(zOrder);
+Index2 = zOrder[zLength- 1];
+Period2 = (1/z$freq[Index2])/2
+Index3 = zOrder[zLength- 6];
+Period3 = (1/z$freq[Index3])/2
+TenHighPrds = c();
+#cat("Mean FI:", mean(FIStor),"Prd1:",(1/z$freq[Index])/2,"Prd2:",Period2,"Prd3:",Period3,"\n");
+for(i in 1:10){
+  
+  Index = zOrder[zLength- i];
+  Period = (1/z$freq[Index])/2;
+  TenHighPrds[i] = Period;
+  
+}
+cat("Mean FI:",mean(FIStor),"\n")
+cat(TenHighPrds)
+
+
+#dev.off()
 
 
