@@ -1,1 +1,65 @@
-add here
+
+data {  				//number of individuals, positive/not positive, time periods
+  int <lower=0> N;            		//N = individual?
+  int <lower=0,upper=1> Ipos[N];  	//P = Positive (1) or not positive (0), should this be infection_status[N]
+  int <lower=0> nTimePeriods;
+  int <lower=1,upper=nTimePeriods> TimePeriod[N];
+  int <lower=0> K;  			//#sinusoidal components above the assumed seasonal effect
+
+}
+ 
+
+parameters {
+  real background_theta;  			// background constant prevalence
+  real dev[nTimePeriods];  			// deviation in prevalence per time period
+  real <lower=0> beta[K];  			// beta coefficient for weighting of periodic deviance term
+  real <lower=0,upper=nTimePeriods> lambda[K]; 	//frequency - but can set upper limit as actual number
+  real <lower=0,upper=1> omega[K];  		// offset for periodic deviance term
+  real <lower=0> beta_ann;
+  real <lower=0,upper=1> omega_ann;
+  real <lower=1e-5> sd_dev; 
+  real beta_trend; //<lower=-3.5,upper=3.5>
+}
+
+transformed parameters {
+  real theta[nTimePeriods];
+  real phi[nTimePeriods];
+
+  for(i in 1:nTimePeriods){
+    theta[i]=background_theta + dev[i] + beta_ann*(cos(2*pi()*(i/2.0-omega_ann/2.0))) + beta_trend*(i-1); //i is time 
+    for(k in 1:K){  							 // consider wave terms; j'th term has periodicity j+1 time periods
+        theta[i]=theta[i]+beta[k]*(cos(2*pi()*(i/lambda[k]-omega[k])));  //allows for omega to specify a fractional offset b/w 0:1 for the starting point of the wave
+    }
+    phi[i] = 1/(1+exp(-theta[i]));
+  }
+}
+
+model {
+  background_theta ~ normal(0,10);
+  beta_ann ~ exponential(0.01);   	//experiment with smaller/larger values
+  beta ~ exponential(0.01);       	//smaller(ie 1/100) is a more flat prior, larger(ie: 1/1) favors beta = 0
+  lambda ~ uniform(1,nTimePeriods);
+  omega ~ uniform(0,1);
+  omega_ann ~ beta(1e-6,1e-6);     	//informative prior because forcing towards either 0 or 1 
+  beta_trend ~ uniform(-3.5,3.5);  	//
+  Ipos ~ bernoulli(phi[TimePeriod]);
+  dev ~ normal(0, sd_dev); 
+
+}
+
+
+//the following block is required for "loo" to work (for LOOCV)
+//repeat the likelihood calculation in a generated quantities block.
+
+generated quantities{ 
+vector[N] log_lik;
+for(i in 1:N){
+//   TimePeriod = TimePeriod[N];#Look up time period for individual i 
+   log_lik[i] = bernoulli_lpmf(Ipos[i] | phi[TimePeriod[i]]);
+}
+}
+
+
+
+
+
