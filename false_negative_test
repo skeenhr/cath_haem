@@ -6,10 +6,10 @@
 
 
 
-false_neg_prob<-function(N111, N100,N110,N000){
+false_neg_prob<-function(N111, N100, N110, N000){
   
-  lik<-function(P, p01, N111, N100,N110,N000){
-    
+  lik<-function(P, p01, N111, N100, N110, N000){
+     
     ifelse(P-p01^3-3*P*p01^2-3*P*p01>=0, P111<-P-p01^3-3*P*p01^2-3*P*p01, P111<-0)
     
     P100<-3*P*p01^2
@@ -33,7 +33,10 @@ false_neg_prob<-function(N111, N100,N110,N000){
   
   for (i in 1:length(TrueProb)) {for (j in 1:length(Prob0given1)) x[i,j]<-lik(TrueProb[i],Prob0given1[j],N111,N100,N110,N000)}
   
-  vec<-c(obsProb(N111, N100, N110, N000), TrueProb[which(x == max(x, na.rm=T), arr.ind=TRUE)[1]], Prob0given1[which(x == max(x, na.rm=T), arr.ind=TRUE)[2]])
+  vec<-c(obsProb(N111, N100, N110, N000), 
+          TrueProb[which(x == max(x, na.rm=T), 
+          arr.ind=TRUE)[1]], 
+          Prob0given1[which(x == max(x, na.rm=T), arr.ind=TRUE)[2]])
   names(vec)<-c("Observed_Proportion","Estimated_proportion", "False_Negative")
   return(vec)
 }
