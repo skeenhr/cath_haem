@@ -46,15 +46,3 @@ model {
   dev ~ normal(0, sd_dev); 
 
 }
-
-
-//the following block is required for "loo" to work (for LOOCV)
-//repeat the likelihood calculation in a generated quantities block.
-
-generated quantities{ 
-vector[N] log_lik;
-for(i in 1:N){
-//   TimePeriod = TimePeriod[N];#Look up time period for individual i 
-   log_lik[i] = bernoulli_lpmf(Ipos[i] | phi[TimePeriod[i]]);
-}
-}Add here
