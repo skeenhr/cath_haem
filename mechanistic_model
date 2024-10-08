@@ -21,10 +21,10 @@ vector<-function(t,y,p){
 
 #################################################################################
 
-Nm = 1e4;          #Seems to have no effect, don't change it from 1e4
-gammaH = 0.5;      #don't change from 0.5; 
-Thm = 1e-1;        #Seems to have little to no effect, don't change it
-Tmh = 1e-3;        #Seems to have little to no effect, don't change it
+Nm = 1e4;          #Minimal effect
+gammaH = 0.5;      #Minimal effect 
+Thm = 1e-1;        #Minimal effect
+Tmh = 1e-3;        #Minimal effect
 p = list(Thm = Thm,gammaH = gammaH, Tmh = Tmh)
 steps  = 1;
 EpizTime = 5;      #3-cycle: 15; 8-12 cycle: 5 
@@ -33,11 +33,11 @@ lam2 = 0.1;        #3-cycle: 0.7  #4.3-cycle: 0.5 #8-12: 0.1;
 maxn = 500;        #Number of generations                                                          
 phi = 30;          #3.3: 1.5; #4.5-cycle: 5 #8cycle: 25; 9-12 cycle: 30
 omega = 0.21;      #3-cycle or 8-cycle or nearly 9-cycle: 0.25; nearly 10-cycle: 0.22;
-#11-cycle: 0.21;   #nearly 12-cycle: 0.205 (period calculation gets weird)
+#11-cycle: 0.21;   #nearly 12-cycle: 0.205 
 ClrFrac = 0.005;   #3-cycle: 0.05; 8-12 cycle: 0.005   
 psi = 0.2          #3-cycle, 8-12 cycle:  0.5; ###this one induced seasonality for a 3-cycle at 0.95
 FourGraphics = 0;
-sigma = 0.05;      #Stochasticity: make this whatever you want it to be 
+sigma = 0.05;      #Stochasticity:
 
 #############################################################################################  
 
