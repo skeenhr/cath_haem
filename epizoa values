@@ -1,0 +1,21 @@
+6-year cycle parameters for bbs 
+
+Nm = 1e4; #Seems to have no effect, don't change it from 1e4
+gammaH = 0.5; #don't change from 0.5; 
+#Mosquitoes do not clear the infection
+Thm = .026; #1e-1; #Seems to have little to no effect, don't change it
+Tmh = .0001; #1e-3; #Seems to have little to no effect, don't change it
+p = list(Thm = Thm,gammaH = gammaH, Tmh = Tmh)
+steps  = 1; #1
+EpizTime = 15; # 3-cycle: 15; 8-12 cycle: 5  ***
+lambda = 1.14; #3-cycle 4.5 #8-cycle: 1.1; 9-cycle: 1.02; 10-12: 1.005 ***
+#9-cycle: lambda = 1.15; 16-cycle: lambda = 1.01; 20-cycle: lambda = 1.0001
+lam2 = 0.2; #3-cycle: 0.7  #4.3-cycle: 0.5 #8-12: 0.1; *****
+maxn = 1000; #Number of generations                                                          
+phi = 13; # 3.3: 1.5; #4.5-cycle: 5 #8cycle: 25; 9-12 cycle: 30 ***
+omega = 0.25; #3-cycle or 8-cycle or nearly 9-cycle: 0.25; nearly 10-cycle: 0.22;                                       ###INCREASE TO .28 OR .29 TO GET SEASONALITY IN A 3 CYCLE, with phi at 2-2.5
+#11-cycle: 0.21; #nearly 12-cycle: 0.205 (period calculation gets weird)
+ClrFrac = 0.005; #3-cycle: 0.05; 8-12 cycle: 0.005   ***affects seasonality aka AMPLITUDE
+psi = 0.5 #3-cycle, 8-12 cycle:  0.5; 
+FourGraphics = 0;
+sigma = 0.0; #Stochasticity: make this whatever you want it to be 
